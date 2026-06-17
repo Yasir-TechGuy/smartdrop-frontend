@@ -1,6 +1,5 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import {
   Button,
   Flex,
@@ -17,79 +16,30 @@ import {
   Tr,
 } from "@chakra-ui/react";
 import { useStellarWallet } from "@/context/StellarWalletContext";
-
-type SortKey = "credits" | "stake";
-
-type LeaderboardEntry = {
-  address: string;
-  totalCredits: number;
-  totalStake: number;
-  boostUtilization: number;
-};
-
-const PAGE_SIZE = 10;
-const REFRESH_MS = 30_000;
+import { useLeaderboard, PAGE_SIZE, type SortKey } from "@/hooks/useLeaderboard";
 
 function truncate(addr: string): string {
   if (addr.length <= 12) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
-  // Wire to Horizon event indexer or Soroban RPC when contract is deployed.
-  await new Promise((r) => setTimeout(r, 400));
-  return Array.from({ length: 100 }, (_, i) => ({
-    address: `G${"A".repeat(55 - String(i + 1).length)}${i + 1}`,
-    totalCredits: 50000 - i * 480,
-    totalStake: 100000 - i * 950,
-    boostUtilization: Math.max(5, 100 - i),
-  }));
-}
-
 export default function LeaderboardPage() {
   const { publicKey } = useStellarWallet();
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [sortKey, setSortKey] = useState<SortKey>("credits");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-
-  const refresh = useCallback(() => {
-    setIsLoading(true);
-    fetchLeaderboard().then((data) => {
-      setEntries(data);
-      setIsLoading(false);
-      setLastRefreshed(new Date());
-    });
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, REFRESH_MS);
-    return () => clearInterval(id);
-  }, [refresh]);
-
-  const sorted = [...entries].sort((a, b) =>
-    sortKey === "credits"
-      ? b.totalCredits - a.totalCredits
-      : b.totalStake - a.totalStake
-  );
-
-  const filtered = sorted.filter((e) =>
-    e.address.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
-
-  const connectedRank = publicKey
-    ? filtered.findIndex((e) => e.address === publicKey) + 1
-    : 0;
+  const {
+    paged,
+    isLoading,
+    sortKey,
+    setSortKey,
+    searchQuery,
+    setSearchQuery,
+    currentPage,
+    totalPages,
+    setPage,
+    connectedRank,
+    filteredCount,
+    lastRefreshed,
+    refresh,
+  } = useLeaderboard(publicKey);
 
   return (
     <Flex direction="column" align="center" mt={8} px={{ base: 4, md: 16 }}>
@@ -99,11 +49,11 @@ export default function LeaderboardPage() {
 
       {connectedRank > 0 ? (
         <Text color="#4ae292" mt={2} fontSize="sm">
-          You are rank {connectedRank} of {filtered.length} farmers.
+          You are rank {connectedRank} of {filteredCount} farmers.
         </Text>
       ) : (
         <Text color="#A2A2A2" mt={2} fontSize="sm">
-          {filtered.length.toLocaleString()} farmers ranked.
+          {filteredCount.toLocaleString()} farmers ranked.
         </Text>
       )}
 
@@ -119,10 +69,7 @@ export default function LeaderboardPage() {
         <Input
           placeholder="Search address…"
           value={searchQuery}
-          onChange={(e) => {
-            setSearchQuery(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => setSearchQuery(e.target.value)}
           maxW={{ base: "100%", md: "280px" }}
           borderRadius="2xl"
           borderColor="#454545"
@@ -134,10 +81,7 @@ export default function LeaderboardPage() {
         <Flex gap={2} align="center">
           <Select
             value={sortKey}
-            onChange={(e) => {
-              setSortKey(e.target.value as SortKey);
-              setPage(1);
-            }}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
             borderRadius="2xl"
             borderColor="#454545"
             bg="black"
@@ -169,9 +113,9 @@ export default function LeaderboardPage() {
         </Flex>
       </Flex>
 
-      {isLoading && entries.length === 0 ? (
+      {isLoading && paged.length === 0 ? (
         <Spinner color="#4ae292" size="xl" mt={16} />
-      ) : filtered.length === 0 ? (
+      ) : filteredCount === 0 ? (
         <Text color="#A2A2A2" mt={16}>
           No results found.
         </Text>
@@ -181,21 +125,11 @@ export default function LeaderboardPage() {
             <Table variant="unstyled" size="sm">
               <Thead>
                 <Tr borderBottom="1px solid #454545">
-                  <Th color="#A2A2A2" fontWeight="normal" pb={3}>
-                    #
-                  </Th>
-                  <Th color="#A2A2A2" fontWeight="normal" pb={3}>
-                    Address
-                  </Th>
-                  <Th color="#A2A2A2" fontWeight="normal" pb={3} isNumeric>
-                    Credits
-                  </Th>
-                  <Th color="#A2A2A2" fontWeight="normal" pb={3} isNumeric>
-                    Stake
-                  </Th>
-                  <Th color="#A2A2A2" fontWeight="normal" pb={3} isNumeric>
-                    Boost %
-                  </Th>
+                  <Th color="#A2A2A2" fontWeight="normal" pb={3}>#</Th>
+                  <Th color="#A2A2A2" fontWeight="normal" pb={3}>Address</Th>
+                  <Th color="#A2A2A2" fontWeight="normal" pb={3} isNumeric>Credits</Th>
+                  <Th color="#A2A2A2" fontWeight="normal" pb={3} isNumeric>Stake</Th>
+                  <Th color="#A2A2A2" fontWeight="normal" pb={3} isNumeric>Boost %</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -223,9 +157,7 @@ export default function LeaderboardPage() {
                             {truncate(entry.address)}
                           </Text>
                           {isMe && (
-                            <Text fontSize="xs" color="#4ae292">
-                              (you)
-                            </Text>
+                            <Text fontSize="xs" color="#4ae292">(you)</Text>
                           )}
                         </Flex>
                       </Td>
