@@ -5,9 +5,9 @@
 
 "use client";
 
-import React, { Component, type ReactNode } from "react";
-import { Box, Button, Heading, Text, VStack } from "@chakra-ui/react";
 import { errorLogger } from "@/lib/error-handler";
+import { Box, Button, Heading, Text, VStack } from "@chakra-ui/react";
+import React, { Component, type ReactNode } from "react";
 
 interface ErrorBoundaryProps {
   children: ReactNode;

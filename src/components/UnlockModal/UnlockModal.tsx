@@ -1,36 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import {
-  Button,
-  Text,
-  Flex,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  Input,
-  Box,
-  Spinner,
-  Link,
-  Alert,
-  AlertIcon,
-  Badge,
-} from "@chakra-ui/react";
-import { useStellarWallet } from "@/context/StellarWalletContext";
-import { useErrorHandler } from "@/context/ErrorContext";
-import {
-  networkPassphrase,
-  poolContractId,
-  sorobanRpcUrl,
-  stellarNetwork,
+    networkPassphrase,
+    poolContractId,
+    sorobanRpcUrl,
+    stellarNetwork,
 } from "@/config";
+import { useErrorHandler } from "@/context/ErrorContext";
+import { useStellarWallet } from "@/context/StellarWalletContext";
+import { useCountdown } from "@/hooks/useCountdown";
 import { trackEvent } from "@/lib/analytics";
 import { stellarExpertTxUrl, unlockAssets } from "@/lib/soroban";
-import { useCountdown } from "@/hooks/useCountdown";
 import { unlockAvailableAt, type FarmPosition } from "@/types/farm";
+import {
+    Alert,
+    AlertIcon,
+    Badge,
+    Box,
+    Button,
+    Flex,
+    Input,
+    Link,
+    Modal,
+    ModalBody,
+    ModalCloseButton,
+    ModalContent,
+    ModalHeader,
+    ModalOverlay,
+    Spinner,
+    Text,
+} from "@chakra-ui/react";
+import { useEffect, useMemo, useState } from "react";
 
 type UnlockModalProps = {
   isOpen: boolean;

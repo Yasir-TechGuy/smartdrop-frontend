@@ -1,7 +1,7 @@
 "use client";
-import { Button } from "@chakra-ui/react";
-import { useStellarWallet } from "@/context/StellarWalletContext";
 import { useErrorHandler } from "@/context/ErrorContext";
+import { useStellarWallet } from "@/context/StellarWalletContext";
+import { Button } from "@chakra-ui/react";
 import { useState } from "react";
 
 export default function ConnectWalletButton() {

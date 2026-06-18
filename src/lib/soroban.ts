@@ -10,13 +10,12 @@
  */
 
 import {
-  ValidationError,
-  ConfigError,
-  FreighterError,
-  ContractError,
-  RPCError,
-  withRetry,
-  type RetryConfig,
+    ConfigError,
+    ContractError,
+    FreighterError,
+    ValidationError,
+    withRetry,
+    type RetryConfig
 } from "@/lib/error-handler";
 
 /**

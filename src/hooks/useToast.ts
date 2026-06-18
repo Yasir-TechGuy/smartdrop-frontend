@@ -5,15 +5,14 @@
 
 "use client";
 
+import {
+    type RetryConfig,
+    errorLogger,
+    normalizeError,
+    withRetry
+} from "@/lib/error-handler";
 import { useToast as useChakraToast } from "@chakra-ui/react";
 import { useCallback } from "react";
-import {
-  SmartDropError,
-  type RetryConfig,
-  normalizeError,
-  withRetry,
-  errorLogger,
-} from "@/lib/error-handler";
 
 export type NotificationType = "success" | "error" | "info" | "warning";
 

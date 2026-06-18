@@ -5,14 +5,14 @@
 
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  type ReactNode,
-} from "react";
-import { setupGlobalErrorHandlers } from "@/lib/error-handler";
 import { useToast, type UseToastReturn } from "@/hooks/useToast";
+import { setupGlobalErrorHandlers } from "@/lib/error-handler";
+import {
+    createContext,
+    useContext,
+    useEffect,
+    type ReactNode,
+} from "react";
 
 interface ErrorContextValue {
   toast: UseToastReturn;

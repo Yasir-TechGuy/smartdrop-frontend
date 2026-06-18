@@ -1,14 +1,14 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
 import { FreighterError } from "@/lib/error-handler";
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useMemo,
+    useState,
+    type ReactNode,
+} from "react";
 
 type StellarWalletContextValue = {
   publicKey: string | null;
