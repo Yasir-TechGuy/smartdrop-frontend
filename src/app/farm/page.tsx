@@ -74,7 +74,13 @@ function EarningRow({
         <Text>{position.totalStakedLiquidity}</Text>
       </Flex>
       <Flex gap={4}>
-        <Button borderRadius="3xl" disabled>
+        <Button 
+          borderRadius="3xl" 
+          disabled
+          opacity={0.6}
+          cursor="not-allowed"
+          _hover={{ opacity: 0.6 }}
+        >
           Boost
         </Button>
         <Tooltip
