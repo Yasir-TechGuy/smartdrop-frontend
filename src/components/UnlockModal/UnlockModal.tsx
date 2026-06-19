@@ -73,6 +73,15 @@ export default function UnlockModal({
       setPending(false);
       setError(null);
       setTxHash(null);
+      
+      // Focus on amount input when modal opens for better accessibility
+      setTimeout(() => {
+        const amountInput = document.querySelector('input[type="number"]') as HTMLInputElement;
+        if (amountInput) {
+          amountInput.focus();
+          amountInput.select();
+        }
+      }, 100);
     }
   }, [isOpen, position]);
 
