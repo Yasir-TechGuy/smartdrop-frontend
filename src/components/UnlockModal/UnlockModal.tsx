@@ -121,6 +121,7 @@ export default function UnlockModal({
 
     setError(null);
     setPending(true);
+    const trackingStartTime = Date.now();
     trackEvent("unlock_initiated", {
       farm: position.name,
       symbol: position.symbol,
@@ -150,6 +151,7 @@ export default function UnlockModal({
         amount: numericAmount,
         hash,
         partial: numericAmount < position.lockedAmount,
+        processingTime: Date.now() - trackingStartTime,
       });
       onUnlocked(position, numericAmount);
     } catch (err) {
