@@ -62,7 +62,7 @@ export default function UnlockModal({
   const numericAmount = Number(amount);
   const amountValid =
     Number.isFinite(numericAmount) &&
-    numericAmount > 0 &&
+    numericAmount >= 0.01 &&
     !!position &&
     numericAmount <= position.lockedAmount;
 
@@ -100,7 +100,13 @@ export default function UnlockModal({
       return;
     }
     if (!amountValid) {
-      setError(`Enter an amount between 0 and ${position.lockedAmount}.`);
+      setError(`Enter an amount between 0.01 and ${position.lockedAmount}.`);
+      return;
+    }
+
+    // Additional validation for minimum unlock amount
+    if (numericAmount < 0.01) {
+      setError("Minimum unlock amount is 0.01.");
       return;
     }
 
@@ -111,6 +117,8 @@ export default function UnlockModal({
       symbol: position.symbol,
       amount: numericAmount,
       partial: numericAmount < position.lockedAmount,
+      lockPeriodElapsed: canUnlock,
+      timeRemaining: countdown.remainingMs,
     });
 
     try {
@@ -124,13 +132,14 @@ export default function UnlockModal({
       setTxHash(hash);
       toast.success(
         "Unlock Submitted",
-        `${numericAmount} ${position.symbol} unlock is being processed`
+        `${numericAmount} ${position.symbol} unlock transaction submitted successfully`
       );
       trackEvent("unlock_succeeded", {
         farm: position.name,
         symbol: position.symbol,
         amount: numericAmount,
         hash,
+        partial: numericAmount < position.lockedAmount,
       });
       onUnlocked(position, numericAmount);
     } catch (err) {
@@ -141,6 +150,7 @@ export default function UnlockModal({
         symbol: position.symbol,
         amount: numericAmount,
         reason: normalizedError.code,
+        errorMessage: normalizedError.message,
       });
     } finally {
       setPending(false);

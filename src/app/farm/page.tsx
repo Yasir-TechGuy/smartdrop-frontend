@@ -199,9 +199,14 @@ export default function Farm() {
           ...p,
           lockedAmount: remaining,
           stake: remaining > 0 ? String(remaining) : "-",
+          // Update earned credits to reflect the unlocked amount
+          earned: remaining > 0 ? p.earned : "-",
         };
       })
     );
+    
+    // Show success message with unlock details
+    console.log(`[SmartDrop] Successfully unlocked ${amount} ${position.symbol} from ${position.name} position`);
   };
 
   const handleLockClick = async () => {
