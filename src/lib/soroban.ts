@@ -126,7 +126,7 @@ export async function unlockAssets(
         // Until the pool contract is deployed we simulate latency and return a
         // deterministic mock hash so the UI flow is fully exercisable end-to-end.
         
-        console.log(`[SmartDrop] Simulating unlock of ${amount} for ${publicKey.slice(0, 8)}...`);
+        console.log(`[SmartDrop] Simulating unlock of ${amount} for ${publicKey.slice(0, 8)}... (${new Date().toISOString()})`);
         await new Promise((resolve) => setTimeout(resolve, 1500));
 
         const hash = `unlock-${publicKey.slice(0, 6)}-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 6)}`;
