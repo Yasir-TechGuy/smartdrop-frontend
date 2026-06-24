@@ -325,8 +325,17 @@ export class SorobanService {
       return {
         success: true,
         transactionHash: submissionResult.hash,
-          hash: submissionResult.hash,
-          gasUsed: simulation.minResourceFee || '0',
+        hash: submissionResult.hash,
+        gasUsed: simulation.minResourceFee || '0',
+      };
+    } catch (error) {
+      console.error('Error locking assets:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
 
   /**
    * Unlock assets from a pool
@@ -606,3 +615,128 @@ export const unlockAssets = async ({
 
 export const stellarExpertTxUrl = (hash: string, network: string) =>
   `https://stellar.expert/explorer/${network}/tx/${hash}`;
+
+// ── Transaction history ───────────────────────────────────────────────────────
+
+export interface TxHistoryEntry {
+  date: string;
+  action: 'lock' | 'unlock';
+  amount: string;
+  symbol: string;
+  poolId: string;
+  creditsEarned?: string;
+  txHash: string;
+}
+
+// Ledger lookback window: ~7 days at ~5 s per ledger.
+const HISTORY_LOOKBACK_LEDGERS = 120960;
+
+interface SorobanRpcServer {
+  getLatestLedger(): Promise<{ sequence: number }>;
+  getEvents(request: Parameters<rpc.Server['getEvents']>[0]): ReturnType<rpc.Server['getEvents']>;
+}
+
+function parseTxHistoryEvent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  evt: any,
+  publicKey: string,
+): TxHistoryEntry | null {
+  try {
+    if (!evt.inSuccessfulContractCall) return null;
+
+    const topicNatives = (evt.topic as xdr.ScVal[]).map(scValToNative);
+    const actionRaw = topicNatives[0] as string;
+    if (actionRaw !== 'lock_assets' && actionRaw !== 'unlock_assets') return null;
+
+    // topic[1] is the user's address — only include events for this wallet
+    const userAddr = topicNatives[1] as string;
+    if (userAddr !== publicKey) return null;
+
+    const action: 'lock' | 'unlock' = actionRaw === 'lock_assets' ? 'lock' : 'unlock';
+
+    const valueNative = scValToNative(evt.value as xdr.ScVal);
+    let amount = '0';
+    let symbol = 'XLM';
+    let creditsEarned: string | undefined;
+
+    if (Array.isArray(valueNative)) {
+      amount = String(valueNative[0] ?? '0');
+      symbol = String(valueNative[1] ?? 'XLM');
+      if (action === 'unlock' && valueNative[2] != null) {
+        creditsEarned = String(valueNative[2]);
+      }
+    } else if (valueNative && typeof valueNative === 'object') {
+      const v = valueNative as Record<string, unknown>;
+      amount = String(v['amount'] ?? '0');
+      symbol = String(v['symbol'] ?? 'XLM');
+      if (action === 'unlock' && v['credits_earned'] != null) {
+        creditsEarned = String(v['credits_earned']);
+      }
+    }
+
+    return {
+      date: evt.ledgerClosedAt as string,
+      action,
+      amount,
+      symbol,
+      poolId: evt.contractId as string,
+      creditsEarned,
+      txHash: evt.txHash as string,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch a user's lock/unlock history by scanning Soroban contract events
+ * emitted by the given pool contracts over the past ~7 days.
+ *
+ * Pass `rpcOverride` in tests to inject a mock RPC server.
+ */
+export async function getUserTransactionHistory(
+  publicKey: string,
+  poolContractIds: string[],
+  rpcOverride?: SorobanRpcServer,
+): Promise<TxHistoryEntry[]> {
+  if (!publicKey || poolContractIds.length === 0) return [];
+
+  const server: SorobanRpcServer = rpcOverride ?? rpcServer;
+
+  try {
+    const latest = await server.getLatestLedger();
+    const startLedger = Math.max(1, latest.sequence - HISTORY_LOOKBACK_LEDGERS);
+
+    const lockSymbol = xdr.ScVal.scvSymbol('lock_assets').toXDR('base64');
+    const unlockSymbol = xdr.ScVal.scvSymbol('unlock_assets').toXDR('base64');
+
+    const response = await server.getEvents({
+      startLedger,
+      filters: [
+        {
+          type: 'contract',
+          contractIds: poolContractIds,
+          topics: [
+            [lockSymbol, '*'],
+            [unlockSymbol, '*'],
+          ],
+        },
+      ],
+      pagination: { limit: 200 },
+    });
+
+    const entries: TxHistoryEntry[] = [];
+    for (const evt of response.events) {
+      const entry = parseTxHistoryEvent(evt, publicKey);
+      if (entry) entries.push(entry);
+    }
+
+    // Newest first
+    return entries.sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+  } catch (error) {
+    console.error('Error fetching transaction history:', error);
+    return [];
+  }
+}
