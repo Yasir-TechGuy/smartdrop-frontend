@@ -9,7 +9,8 @@ import { useStellarWallet } from "@/context/StellarWalletContext";
 import { useCountdown } from "@/hooks/useCountdown";
 import { trackEvent } from "@/lib/analytics";
 import { stellarExpertTxUrl, unlockAssets } from "@/lib/soroban";
-import { unlockAvailableAt, type FarmPosition } from "@/types/farm";
+import { useFarmStore } from "@/store/farmStore";
+import { unlockAvailableAt } from "@/types/farm";
 import {
     Alert,
     AlertIcon,
@@ -30,20 +31,11 @@ import {
 } from "@chakra-ui/react";
 import { useEffect, useMemo, useState } from "react";
 
-type UnlockModalProps = {
-  isOpen: boolean;
-  position: FarmPosition | null;
-  onClose: () => void;
-  /** Called after a confirmed unlock with the amount removed from the stake. */
-  onUnlocked: (position: FarmPosition, amount: number) => void;
-};
-
-export default function UnlockModal({
-  isOpen,
-  position,
-  onClose,
-  onUnlocked,
-}: UnlockModalProps) {
+export default function UnlockModal() {
+  const selectedPosition = useFarmStore((s) => s.selectedPosition);
+  const isUnlock = useFarmStore((s) => s.activeModal === "unlock");
+  const close = useFarmStore((s) => s.close);
+  const position = selectedPosition;
   const { publicKey, walletApi } = useStellarWallet();
   const toast = useErrorHandler();
   const [amount, setAmount] = useState("");
@@ -64,7 +56,7 @@ export default function UnlockModal({
 
   // Reset transient state whenever the modal opens for a (new) position.
   useEffect(() => {
-    if (isOpen && position) {
+    if (isUnlock && position) {
       setAmount(String(position.lockedAmount));
       setPending(false);
       setError(null);
@@ -79,7 +71,7 @@ export default function UnlockModal({
         }
       }, 100);
     }
-  }, [isOpen, position]);
+  }, [isUnlock, position]);
 
   const explorerUrl = useMemo(
     () => (txHash ? stellarExpertTxUrl(txHash, stellarNetwork) : null),
@@ -90,7 +82,7 @@ export default function UnlockModal({
 
   const handleClose = () => {
     if (pending) return;
-    onClose();
+    close();
   };
 
   const setMax = () => setAmount(String(position.lockedAmount));
@@ -149,7 +141,13 @@ export default function UnlockModal({
         partial: numericAmount < position.lockedAmount,
         processingTime: Date.now() - trackingStartTime,
       });
-      onUnlocked(position, numericAmount);
+      // TODO(#28): optimistic queryClient.getQueryData update attaches here pending
+      //            maintainer confirmation — see issue discussion
+      toast.success(
+        "Unlock submitted",
+        `${numericAmount} ${position.symbol} unlock request sent.`
+      );
+      close();
     } catch (err) {
       const normalizedError = toast.handleError(err, "Unlock Transaction");
       setError(normalizedError.userMessage);
@@ -173,7 +171,7 @@ export default function UnlockModal({
   );
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose}>
+    <Modal isOpen={isUnlock} onClose={handleClose}>
       <ModalOverlay backdropFilter="blur(3px)" />
       <ModalContent bg="app.surface" color="app.text" borderRadius="3xl">
         <ModalHeader mx="auto">Unlock {position.symbol}</ModalHeader>
@@ -215,7 +213,7 @@ export default function UnlockModal({
                 bg="app.accent"
                 color="app.onAccent"
                 _hover={{ opacity: 0.9 }}
-                onClick={onClose}
+                onClick={handleClose}
               >
                 Done
               </Button>
