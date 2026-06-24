@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Button,
   Text,
@@ -32,6 +32,7 @@ import { unlockAvailableAt, type FarmPosition } from "@/types/farm";
 import { useAllUserPositions, usePools } from "@/hooks/useSorobanQuery";
 import { useSorobanEvents } from "@/hooks/useSorobanEvents";
 import type { UserPosition } from "@/lib/soroban";
+import { useFarmStore } from "@/store/farmStore";
 
 type LivePoolRow = {
   id: string;
@@ -73,13 +74,39 @@ function MetricColumn({
   );
 }
 
-function EarningRow({
-  position,
-  onUnlock,
-}: {
+type EarningRowProps = {
   position: FarmPosition;
-  onUnlock: (position: FarmPosition) => void;
-}) {
+};
+
+// Keep this synchronized with FarmPosition in src/types/farm.ts. Every rendered
+// field must be compared, or memoization can hide row updates when fields change.
+function earningRowPropsAreEqual(
+  previous: EarningRowProps,
+  next: EarningRowProps
+) {
+  const previousPosition = previous.position;
+  const nextPosition = next.position;
+
+  return (
+    previousPosition.id === nextPosition.id &&
+    previousPosition.name === nextPosition.name &&
+    previousPosition.img === nextPosition.img &&
+    previousPosition.earned === nextPosition.earned &&
+    previousPosition.stake === nextPosition.stake &&
+    previousPosition.dailyRate === nextPosition.dailyRate &&
+    previousPosition.totalStakedLiquidity ===
+      nextPosition.totalStakedLiquidity &&
+    previousPosition.symbol === nextPosition.symbol &&
+    previousPosition.lockedAmount === nextPosition.lockedAmount &&
+    previousPosition.lockedAt === nextPosition.lockedAt &&
+    previousPosition.lockPeriodSeconds === nextPosition.lockPeriodSeconds
+  );
+}
+
+export const EarningRow = memo(function EarningRow({
+  position,
+}: EarningRowProps) {
+  const openUnlock = useFarmStore((s) => s.openUnlock);
   const countdown = useCountdown(unlockAvailableAt(position));
   const hasStake = position.lockedAmount > 0;
   const canUnlock = hasStake && countdown.isElapsed;
@@ -162,7 +189,7 @@ function EarningRow({
           <Box w={{ base: "full", md: "auto" }}>
             <Button
               borderRadius="3xl"
-              onClick={() => onUnlock(position)}
+              onClick={() => openUnlock(position)}
               isDisabled={!canUnlock}
               w={{ base: "full", md: "auto" }}
             >
@@ -173,7 +200,7 @@ function EarningRow({
       </Flex>
     </Flex>
   );
-}
+}, earningRowPropsAreEqual);
 
 export default function Farm() {
   const { publicKey, isConnected } = useStellarWallet();
@@ -205,8 +232,6 @@ export default function Farm() {
 
   const [selectedFarm, setSelectedFarm] = useState<LivePoolRow | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [unlockPosition, setUnlockPosition] = useState<FarmPosition | null>(null);
-  const [isUnlockOpen, setIsUnlockOpen] = useState(false);
   const [submitPending, setSubmitPending] = useState(false);
   const [sliderValue, setSliderValue] = useState(50);
 
@@ -291,28 +316,6 @@ export default function Farm() {
   const handleModalClose = () => {
     setIsModalOpen(false);
     setSelectedFarm(null);
-  };
-
-  const handleUnlockClick = (position: FarmPosition) => {
-    setUnlockPosition(position);
-    setIsUnlockOpen(true);
-  };
-
-  const handleUnlockClose = () => {
-    setIsUnlockOpen(false);
-    setUnlockPosition(null);
-  };
-
-  const handleUnlocked = (position: FarmPosition, amount: number) => {
-    setIsUnlockOpen(false);
-    setUnlockPosition(null);
-    toast({
-      title: "Unlock submitted",
-      description: `${amount} ${position.symbol} unlock request sent.`,
-      status: "success",
-      duration: 6000,
-      isClosable: true,
-    });
   };
 
   const handleLockClick = async () => {
@@ -434,11 +437,7 @@ export default function Farm() {
         </Alert>
       ) : (
         myPositions.map((position) => (
-          <EarningRow
-            key={position.id}
-            position={position}
-            onUnlock={handleUnlockClick}
-          />
+          <EarningRow key={position.id} position={position} />
         ))
       )}
 
@@ -484,12 +483,7 @@ export default function Farm() {
         </ModalContent>
       </Modal>
 
-      <UnlockModal
-        isOpen={isUnlockOpen}
-        onClose={handleUnlockClose}
-        onUnlocked={handleUnlocked}
-        position={unlockPosition}
-      />
+      <UnlockModal />
     </Flex>
   );
 }
