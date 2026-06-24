@@ -32,6 +32,9 @@ export default function Navbar() {
         <Link href="/farm" style={{ color: "white" }}>
           Farm
         </Link>
+        <Link href="/history" style={{ color: "white" }}>
+          History
+        </Link>
         <Link href="/leaderboard" style={{ color: "white" }}>
           Leaderboard
         </Link>
@@ -57,6 +60,9 @@ export default function Navbar() {
         SMARTDROP
       </Text>
       <Flex gap={8} p={8} align="center" flexWrap="wrap" justify="flex-end">
+        <Link href="/history" style={{ color: "white", textDecoration: "underline" }}>
+          History
+        </Link>
         <Link href="/contributors" style={{ color: "white", textDecoration: "underline" }}>
           Contributors
         </Link>
