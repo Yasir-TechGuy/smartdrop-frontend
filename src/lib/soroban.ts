@@ -77,13 +77,22 @@ export function parseUserPositionFromXdrResult(
   poolId: string,
   userAddress: string,
 ): UserPosition | null {
+  let native: unknown;
   try {
-    const native = scValToNative(xdrResult) as Record<string, unknown>;
-    return parseUserPositionFromNative(native, poolId, userAddress);
+    native = scValToNative(xdrResult);
   } catch (err) {
-    console.warn('[SmartDrop] parseUserPositionFromXdr: failed to parse:', err);
+    console.warn('[SmartDrop] parseUserPositionFromXdr: failed to deserialise ScVal:', err);
     return null;
   }
+
+  if (native == null) return null;
+
+  if (typeof native !== 'object' || Array.isArray(native)) {
+    console.warn('[SmartDrop] parseUserPositionFromXdr: expected Map (object), got', typeof native);
+    return null;
+  }
+
+  return parseUserPositionFromNative(native as Record<string, unknown>, poolId, userAddress);
 }
 
 export function parseCreditsFromXdrResult(xdrResult: xdr.ScVal): string {
@@ -628,10 +637,30 @@ export const unlockAssets = async ({
   publicKey: string;
   amount: string;
   walletApi: any;
-}) => sorobanService.unlockAssets(poolContractId, publicKey, amount, walletApi);
+}) => {
+  // Convert display-unit amount to integer stroops before passing as i128.
+  // 1 display unit = 10,000,000 stroops (Stellar's fixed-point precision).
+  const stroops = Math.round(parseFloat(amount) * 10_000_000).toString();
+  return sorobanService.unlockAssets(poolContractId, publicKey, stroops, walletApi);
+};
 
 export const stellarExpertTxUrl = (hash: string, network: string) =>
   `https://stellar.expert/explorer/${network}/tx/${hash}`;
+
+/**
+ * Compute live-preview values for a partial unlock.
+ * All arguments and return values are in display units (not stroops).
+ */
+export function computePartialUnlockPreview(
+  lockedAmount: number,
+  unlockAmount: number,
+  dailyRate: number,
+): { remainingStake: number; newDailyRate: number } {
+  const remainingStake = lockedAmount - unlockAmount;
+  const newDailyRate =
+    lockedAmount > 0 ? (remainingStake / lockedAmount) * dailyRate : 0;
+  return { remainingStake, newDailyRate };
+}
 
 // ── Transaction history ───────────────────────────────────────────────────────
 
