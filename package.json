@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "playwright": "playwright test --config e2e/playwright.config.ts",
     "contributors:sync": "node scripts/sync-lernza-contributors.mjs",
     "contributors:github-insights": "node scripts/record-lernza-github-coauthors.mjs"
   },
