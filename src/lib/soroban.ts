@@ -260,15 +260,12 @@ export class SorobanService {
    * Lock assets in a pool
    */
   async lockAssets(
-    poolId: string, 
-    userAddress: string, 
+    poolId: string,
+    userAddress: string,
     amount: string,
     walletApi: any // Freighter API instance
   ): Promise<TransactionResult> {
-    const poolContract = this.poolContracts.get(poolId);
-    if (!poolContract) {
-      throw new Error(`Pool contract not found for ID: ${poolId}`);
-    }
+    const poolContract = this.resolvePoolContract(poolId);
 
     try {
       // Build the lock_assets call
@@ -322,11 +319,24 @@ export class SorobanService {
         };
       }
 
+      // Poll until the transaction is confirmed (status leaves PENDING)
+      await this.waitForConfirmation(submissionResult.hash);
+
       return {
         success: true,
         transactionHash: submissionResult.hash,
-          hash: submissionResult.hash,
-          gasUsed: simulation.minResourceFee || '0',
+        hash: submissionResult.hash,
+        gasUsed: simulation.minResourceFee || '0',
+      };
+
+    } catch (error) {
+      console.error('Error locking assets:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error locking assets',
+      };
+    }
+  }
 
   /**
    * Unlock assets from a pool
@@ -337,10 +347,7 @@ export class SorobanService {
     amount: string,
     walletApi: any
   ): Promise<TransactionResult> {
-    const poolContract = this.poolContracts.get(poolId);
-    if (!poolContract) {
-      throw new Error(`Pool contract not found for ID: ${poolId}`);
-    }
+    const poolContract = this.resolvePoolContract(poolId);
 
     try {
       const call = poolContract.call(
@@ -388,13 +395,15 @@ export class SorobanService {
         };
       }
 
+      await this.waitForConfirmation(submissionResult.hash);
+
       return {
         success: true,
         transactionHash: submissionResult.hash,
         hash: submissionResult.hash,
         gasUsed: simulation.minResourceFee || '0',
       };
-      
+
     } catch (error) {
       console.error('Error unlocking assets:', error);
       return {
@@ -413,10 +422,7 @@ export class SorobanService {
     allocationPercentage: number,
     walletApi: any
   ): Promise<TransactionResult> {
-    const poolContract = this.poolContracts.get(poolId);
-    if (!poolContract) {
-      throw new Error(`Pool contract not found for ID: ${poolId}`);
-    }
+    const poolContract = this.resolvePoolContract(poolId);
 
     if (allocationPercentage < 0 || allocationPercentage > 100) {
       return {
@@ -529,6 +535,50 @@ export class SorobanService {
     }
   }
 
+  /**
+   * Resolve a pool contract either from the cached map or directly from a
+   * contract ID string.  Allows the deposit flow to work even when the factory
+   * is not configured and pools were discovered another way.
+   */
+  private resolvePoolContract(poolId: string): Contract {
+    const cached = this.poolContracts.get(poolId);
+    if (cached) return cached;
+
+    // If the poolId itself looks like a Stellar contract address (C…) treat it
+    // as a contract ID and create a Contract on the fly.
+    if (poolId.startsWith('C') && poolId.length >= 56) {
+      const contract = new Contract(poolId);
+      this.poolContracts.set(poolId, contract);
+      return contract;
+    }
+
+    throw new Error(`Pool contract not found for ID: ${poolId}`);
+  }
+
+  /**
+   * Poll until a submitted transaction leaves the PENDING state.
+   * Returns true when the transaction is confirmed (SUCCESS), throws on failure.
+   */
+  async waitForConfirmation(
+    hash: string,
+    maxAttempts = 30,
+    intervalMs = 2000,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const tx = await this.rpcServer.getTransaction(hash);
+
+      if (tx.status === rpc.Api.GetTransactionStatus.SUCCESS) {
+        return;
+      }
+      if (tx.status === rpc.Api.GetTransactionStatus.FAILED) {
+        throw new Error(`Transaction ${hash} failed on-chain`);
+      }
+      // NOT_FOUND or PENDING — keep polling
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    throw new Error(`Transaction ${hash} not confirmed after ${maxAttempts} attempts`);
+  }
+
   // Helper methods for parsing XDR data
   private parsePoolsFromXdr(xdrResult: xdr.ScVal): PoolInfo[] {
     // Actual contract parsing should be implemented here when the Soroban result schema is available.
@@ -591,6 +641,18 @@ export const formatAssetAmount = (amount: string, asset: AssetInfo): string => {
   const num = parseFloat(amount);
   return `${num.toLocaleString()} ${asset.code}`;
 };
+
+export const lockAssets = async ({
+  poolContractId,
+  publicKey,
+  amount,
+  walletApi,
+}: {
+  poolContractId: string;
+  publicKey: string;
+  amount: string;
+  walletApi: any;
+}) => sorobanService.lockAssets(poolContractId, publicKey, amount, walletApi);
 
 export const unlockAssets = async ({
   poolContractId,
