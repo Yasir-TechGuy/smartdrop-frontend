@@ -8,7 +8,7 @@ import { useErrorHandler } from "@/context/ErrorContext";
 import { useStellarWallet } from "@/context/StellarWalletContext";
 import { useCountdown } from "@/hooks/useCountdown";
 import { trackEvent } from "@/lib/analytics";
-import { stellarExpertTxUrl, unlockAssets } from "@/lib/soroban";
+import { stellarExpertTxUrl, unlockAssets, computePartialUnlockPreview } from "@/lib/soroban";
 import { unlockAvailableAt, type FarmPosition } from "@/types/farm";
 import {
     Alert,
@@ -96,6 +96,14 @@ export default function UnlockModal({
   };
 
   const setMax = () => setAmount(String(position.lockedAmount));
+  const set50Pct = () => setAmount(String(position.lockedAmount / 2));
+
+  const numericDailyRate = parseFloat(position.dailyRate) || 0;
+  const { remainingStake, newDailyRate } = computePartialUnlockPreview(
+    position.lockedAmount,
+    numericAmount,
+    numericDailyRate,
+  );
 
   const handleUnlock = async () => {
     if (!publicKey) {
@@ -264,6 +272,7 @@ export default function UnlockModal({
                     borderRadius="2xl"
                     placeholder="Amount"
                     h="50px"
+                    pr="120px"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     isDisabled={!canUnlock || pending}
@@ -285,6 +294,16 @@ export default function UnlockModal({
                       fontSize="xs"
                       color={ACCENT}
                       cursor={canUnlock ? "pointer" : "not-allowed"}
+                      onClick={canUnlock ? set50Pct : undefined}
+                      _hover={canUnlock ? { opacity: 0.8 } : {}}
+                      transition="opacity 0.2s"
+                    >
+                      50%
+                    </Text>
+                    <Text
+                      fontSize="xs"
+                      color={ACCENT}
+                      cursor={canUnlock ? "pointer" : "not-allowed"}
                       onClick={canUnlock ? setMax : undefined}
                       _hover={canUnlock ? { opacity: 0.8 } : {}}
                       transition="opacity 0.2s"
@@ -294,6 +313,35 @@ export default function UnlockModal({
                   </Flex>
                 </Box>
               </Flex>
+
+              {amountValid && (
+                <Box border="1px solid #303030" borderRadius="2xl" p={3}>
+                  {infoRow(
+                    "Remaining stake",
+                    `${remainingStake.toFixed(4)} ${position.symbol}`,
+                  )}
+                  {infoRow(
+                    "New daily rate",
+                    `${newDailyRate.toFixed(6)} credits/day`,
+                  )}
+                </Box>
+              )}
+
+              {amountValid &&
+                !!position.minDepositAmount &&
+                remainingStake > 0 &&
+                remainingStake < position.minDepositAmount && (
+                  <Alert
+                    status="warning"
+                    borderRadius="2xl"
+                    bg="#2a2412"
+                    color="#f6c453"
+                    fontSize="sm"
+                  >
+                    <AlertIcon color="#f6c453" />
+                    Warning: remaining stake below minimum — the contract will close this position entirely
+                  </Alert>
+                )}
 
               {error && (
                 <Alert
