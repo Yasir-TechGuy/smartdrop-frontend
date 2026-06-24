@@ -259,6 +259,43 @@ export class SorobanService {
   /**
    * Lock assets in a pool
    */
+  /**
+   * Resolve a pool contract from the cache or directly from a contract address.
+   * Falls back to constructing a Contract on the fly when the pool was discovered
+   * outside the factory (e.g. via the NEXT_PUBLIC_POOL_CONTRACT_ID env var).
+   */
+  private resolvePoolContract(poolId: string): Contract {
+    const cached = this.poolContracts.get(poolId);
+    if (cached) return cached;
+    // Stellar contract IDs start with 'C' and are 56 characters long.
+    if (poolId.startsWith('C') && poolId.length >= 56) {
+      const contract = new Contract(poolId);
+      this.poolContracts.set(poolId, contract);
+      return contract;
+    }
+    throw new Error(`Pool contract not found for ID: ${poolId}`);
+  }
+
+  /**
+   * Poll getTransaction until the tx is no longer PENDING or NOT_FOUND.
+   * Throws if the tx fails or the poll limit is exceeded.
+   */
+  async waitForConfirmation(
+    hash: string,
+    maxAttempts = 30,
+    intervalMs = 2000,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const tx = await this.rpcServer.getTransaction(hash);
+      if (tx.status === rpc.Api.GetTransactionStatus.SUCCESS) return;
+      if (tx.status === rpc.Api.GetTransactionStatus.FAILED) {
+        throw new Error(`Transaction ${hash} failed on-chain`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    throw new Error(`Transaction ${hash} not confirmed after ${maxAttempts} attempts`);
+  }
+
   async lockAssets(
     poolId: string,
     userAddress: string,
@@ -642,6 +679,7 @@ export const formatAssetAmount = (amount: string, asset: AssetInfo): string => {
   return `${num.toLocaleString()} ${asset.code}`;
 };
 
+/** Convenience wrapper — call lock_assets on a pool and await on-chain confirmation. */
 export const lockAssets = async ({
   poolContractId,
   publicKey,
